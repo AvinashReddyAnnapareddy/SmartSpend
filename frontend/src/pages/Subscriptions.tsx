@@ -6,7 +6,7 @@ import {
 import { formatCurrency, cn, formatDate } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { getSubscriptions, createSubscription, deleteSubscription } from '../lib/api';
+import { getSubscriptions, createSubscription, deleteSubscription, getTransactions } from '../lib/api';
 
 const serviceIcons: Record<string, any> = {
   'Netflix': Tv,
@@ -18,6 +18,7 @@ const serviceIcons: Record<string, any> = {
 
 export default function Subscriptions() {
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [historyTransactions, setHistoryTransactions] = useState<any[]>([]);
   const [insightsData, setInsightsData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Active');
@@ -46,6 +47,10 @@ export default function Subscriptions() {
         color: colors[i % colors.length]
       }));
       setInsightsData(insights);
+
+      const txData = await getTransactions();
+      const subTxs = txData.filter((tx: any) => tx.description && tx.description.includes('Subscription Payment'));
+      setHistoryTransactions(subTxs);
     } catch (error) {
       console.error("Failed to fetch subscriptions", error);
     } finally {
@@ -101,13 +106,27 @@ export default function Subscriptions() {
   const totalMonthly = activeSubscriptions.reduce((acc, sub) => acc + sub.amount, 0);
   const nextRenewal = activeSubscriptions.length > 0 ? formatDate(activeSubscriptions[0].nextBilling || activeSubscriptions[0].next_billing_date) : '-';
 
+  const getPaymentStatus = (dateString: string) => {
+    if (!dateString) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const billingDate = new Date(dateString);
+    billingDate.setHours(0, 0, 0, 0);
+
+    if (billingDate < today) return 'OVERDUE';
+    if (billingDate.getTime() === today.getTime()) return 'DUE TODAY';
+    return 'UPCOMING';
+  };
+
   const filteredSubscriptions = subscriptions.filter(sub => {
+    if (activeTab === 'History') return false; 
+    
+    const status = getPaymentStatus(sub.next_billing_date);
+    
     if (activeTab === 'Active') return sub.is_active;
-    if (activeTab === 'History') return !sub.is_active;
-    if (activeTab === 'Upcoming') {
-      // Just show active for now, or filter by date
-      return sub.is_active; 
-    }
+    if (activeTab === 'Upcoming') return sub.is_active && status === 'UPCOMING';
+    if (activeTab === 'Overdue') return sub.is_active && (status === 'OVERDUE' || status === 'DUE TODAY');
+    
     return true;
   });
 
@@ -120,7 +139,7 @@ export default function Subscriptions() {
           {/* Action Row */}
           <div className="flex items-center justify-between mb-5">
             <div className="flex bg-white p-1 rounded-lg border border-[#e2e8f0]">
-               {['Active', 'Upcoming', 'History'].map((tab) => (
+               {['Active', 'Upcoming', 'Overdue', 'History'].map((tab) => (
                  <button 
                    key={tab} 
                    onClick={() => setActiveTab(tab)}
@@ -173,10 +192,41 @@ export default function Subscriptions() {
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-50">
-                    {filteredSubscriptions.length === 0 ? (
+                    {activeTab === 'History' ? (
+                      historyTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-8 text-center text-slate-500 text-sm">
+                            No payment history found.
+                          </td>
+                        </tr>
+                      ) : (
+                        historyTransactions.map(tx => {
+                          const serviceName = tx.description.replace(' Subscription Payment', '');
+                          const Icon = serviceIcons[serviceName] || LayoutGrid;
+                          return (
+                            <tr key={`tx-${tx.id}`} className="hover:bg-slate-50 transition-colors group">
+                               <td className="px-6 py-3">
+                                  <div className="flex items-center gap-3">
+                                     <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-slate-400 border border-slate-200 overflow-hidden">
+                                        <Icon className="w-4 h-4" />
+                                     </div>
+                                     <span className="text-[13px] font-bold text-[#1e293b]">{serviceName}</span>
+                                  </div>
+                               </td>
+                               <td className="px-6 py-3 text-[11px] text-slate-500 font-medium">-</td>
+                               <td className="px-6 py-3 font-bold text-slate-600 text-[11px]">Paid on {formatDate(tx.transaction_date)}</td>
+                               <td className="px-6 py-3 font-bold font-mono text-[#1e293b] text-[13px] text-right">{formatCurrency(tx.amount)}</td>
+                               <td className="px-6 py-3 text-right">
+                                 <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest px-2 py-1 bg-emerald-50 rounded">Paid</span>
+                               </td>
+                            </tr>
+                          );
+                        })
+                      )
+                    ) : filteredSubscriptions.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-8 text-center text-slate-500 text-sm">
-                          {activeTab === 'History' ? "No subscription history." : "No subscriptions found. Click 'New' to add one."}
+                          {activeTab === 'Overdue' ? "No overdue subscriptions. You are all caught up!" : "No subscriptions found. Click 'New' to add one."}
                         </td>
                       </tr>
                     ) : (
@@ -193,7 +243,17 @@ export default function Subscriptions() {
                                 </div>
                              </td>
                              <td className="px-6 py-3 text-[11px] text-slate-500 font-medium">{sub.billing_cycle}</td>
-                             <td className="px-6 py-3 font-bold text-slate-600 text-[11px]">{formatDate(sub.next_billing_date)}</td>
+                             <td className="px-6 py-3">
+                               <div className="flex flex-col items-start gap-1">
+                                 <span className="font-bold text-slate-600 text-[11px]">{formatDate(sub.next_billing_date)}</span>
+                                 {sub.is_active && (() => {
+                                   const status = getPaymentStatus(sub.next_billing_date);
+                                   if (status === 'OVERDUE') return <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider bg-red-50 px-1.5 py-0.5 rounded">Overdue</span>;
+                                   if (status === 'DUE TODAY') return <span className="text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded">Due Today</span>;
+                                   return <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded">Upcoming</span>;
+                                 })()}
+                               </div>
+                             </td>
                              <td className="px-6 py-3 font-bold font-mono text-[#1e293b] text-[13px] text-right">{formatCurrency(sub.amount)}</td>
                              <td className="px-6 py-3 text-right">
                                {sub.is_active && (

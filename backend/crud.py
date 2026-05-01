@@ -311,15 +311,41 @@ def delete_subscription(db: Session, sub_id: int, user_id: int):
     return True
 
 def update_subscription_next_billing(db: Session, sub_id: int, user_id: int):
-    from dateutil.relativedelta import relativedelta
+    import datetime
+    import calendar
+    
     db_sub = db.query(models.Subscription).filter(models.Subscription.id == sub_id, models.Subscription.user_id == user_id).first()
     if not db_sub:
         return None
     
+    current_date = db_sub.next_billing_date
     if db_sub.billing_cycle == "MONTHLY":
-        db_sub.next_billing_date = db_sub.next_billing_date + relativedelta(months=1)
+        # Calculate next month
+        month = current_date.month
+        year = current_date.year
+        if month == 12:
+            month = 1
+            year += 1
+        else:
+            month += 1
+        
+        # Handle end of month (e.g. Jan 31 -> Feb 28)
+        last_day_of_month = calendar.monthrange(year, month)[1]
+        day = min(current_date.day, last_day_of_month)
+        
+        db_sub.next_billing_date = datetime.date(year, month, day)
+        
     elif db_sub.billing_cycle == "YEARLY":
-        db_sub.next_billing_date = db_sub.next_billing_date + relativedelta(years=1)
+        # Calculate next year
+        year = current_date.year + 1
+        month = current_date.month
+        day = current_date.day
+        
+        # Handle leap year (Feb 29 -> Feb 28)
+        if month == 2 and day == 29 and not calendar.isleap(year):
+            day = 28
+            
+        db_sub.next_billing_date = datetime.date(year, month, day)
     
     db.commit()
     db.refresh(db_sub)
