@@ -1,6 +1,7 @@
 import { Header } from '../components/Header';
+import { BudgetCard } from '../components/BudgetCard';
 import { useState, useEffect, useMemo } from 'react';
-import { createBudget, getBudgets, getCategories, getTransactions, updateBudget } from '../lib/api';
+import { createBudget, getBudgets, getCategories, getTransactions, updateBudget, deleteBudget } from '../lib/api';
 import { 
   Plus, 
   ArrowUpRight, 
@@ -133,11 +134,24 @@ export default function Budgets() {
       }
       await refreshBudgets();
       closeBudgetForm();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save budget', error);
-      setFormError('Failed to save budget');
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to save budget';
+      setFormError(errorMessage);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteBudget = async (budgetId: number) => {
+    if (window.confirm('Are you sure you want to delete this budget?')) {
+      try {
+        await deleteBudget(budgetId);
+        await refreshBudgets();
+      } catch (error: any) {
+        console.error('Failed to delete budget', error);
+        alert('Failed to delete budget');
+      }
     }
   };
 
@@ -190,20 +204,7 @@ export default function Budgets() {
       <div className="p-6 h-[calc(100vh-64px)] overflow-hidden flex gap-6">
         <div className="flex-1 flex flex-col min-w-0 pr-2 overflow-y-auto">
           {/* Controls */}
-          <div className="flex items-center justify-between mb-6">
-             <div className="flex bg-white p-1 rounded-lg border border-[#e2e8f0]">
-              {['Current', 'Previous', 'Saved'].map((tab) => (
-                <button 
-                  key={tab} 
-                  className={cn(
-                    "px-5 py-1.5 rounded-md text-[11px] font-bold transition-all",
-                    tab === 'Current' ? "bg-brand-600 text-white" : "text-slate-500 hover:text-slate-900"
-                  )}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center justify-end mb-6">
             <div className="flex items-center gap-3">
               <button
                 onClick={openNewBudgetForm}
@@ -263,36 +264,21 @@ export default function Budgets() {
               </div>
 
               <div className="mt-4 space-y-2">
-                <label className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">
-                  Categories
+                <label className="text-[10px] text-slate-400 uppercase font-bold tracking-widest px-1">
+                  Category
                 </label>
-                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-3 max-h-40 overflow-y-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {expenseCategories.map((c) => {
-                      const categoryId = Number(c.id);
-                      const inputId = `budget-category-${categoryId}`;
-                      return (
-                        <div
-                          key={inputId}
-                          className="flex items-center gap-2 text-[11px] font-bold text-slate-600"
-                        >
-                          <input
-                            id={inputId}
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={formCategoryIds.includes(categoryId)}
-                            onChange={() => toggleFormCategory(categoryId)}
-                          />
-                          <label
-                            htmlFor={inputId}
-                            className="truncate cursor-pointer select-none"
-                          >
-                            {c.name}
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="relative">
+                  <select
+                    value={formCategoryIds[0] || ''}
+                    onChange={(e) => setFormCategoryIds([Number(e.target.value)])}
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2.5 text-[11px] font-bold outline-none appearance-none"
+                  >
+                    <option value="" disabled>Select a category</option>
+                    {expenseCategories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 rotate-90 text-slate-400 pointer-events-none" />
                 </div>
               </div>
 
@@ -338,81 +324,22 @@ export default function Budgets() {
           </motion.div>
 
           {/* Budget Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-6">
             {budgetsWithSpent.map((budget, i) => {
               const primaryCategoryName = budget.categories?.[0]?.name;
               const Icon = categoryIcons[primaryCategoryName] || UtensilsCrossed;
-              const percent = budget.amount ? (budget.spent / budget.amount) * 100 : 0;
-              const widthPercent = Math.min(Math.max(percent, 0), 100);
               return (
-                <motion.div 
+                <BudgetCard
                   key={budget.id}
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="bg-white p-5 rounded-xl border border-[#e2e8f0] shadow-none relative group"
-                >
-                  <div className="flex justify-between items-start mb-5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 border border-slate-100">
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-[13px] font-bold text-[#1e293b] tracking-tight">{budget.name}</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Active Budget</p>
-                        <p className="text-[11px] text-slate-500 font-medium mt-1 truncate max-w-[190px]">
-                          {(budget.categories ?? []).map((c: any) => c.name).join(', ')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest leading-none mb-1">Total</p>
-                       <p className="text-sm font-bold font-mono text-[#1e293b] leading-none">{formatCurrency(budget.amount)}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                       <div 
-                        className={cn(
-                          "h-full rounded-full",
-                          percent > 90 ? "bg-rose-500" : percent > 70 ? "bg-amber-500" : "bg-emerald-500"
-                        )}
-                        style={{ width: `${widthPercent}%` }}
-                       />
-                    </div>
-                    
-                    <div className="flex justify-between items-center text-[11px] mb-2 font-medium">
-                      <span className="text-slate-500">Spent: <span className="font-bold text-slate-900 font-mono">{formatCurrency(budget.spent)}</span></span>
-                      <span className={cn(
-                        "font-bold",
-                        percent > 90 ? "text-rose-500" : percent > 70 ? "text-amber-500" : "text-emerald-500"
-                      )}>{Math.round(percent)}%</span>
-                    </div>
-
-                    <div className="space-y-2 pt-2">
-                      {transactions
-                        .filter((t) => budget.categoryIds.includes(Number(t.category.id)))
-                        .slice(0, 2)
-                        .map((t) => (
-                        <div key={t.id} className="flex items-center justify-between py-1 border-t border-slate-50 first:border-0">
-                          <span className="text-[11px] text-slate-600 truncate max-w-[140px]">{t.description}</span>
-                          <span className="text-[11px] font-bold font-mono text-[#1e293b]">{formatCurrency(t.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
-                     <button
-                      onClick={() => openEditBudgetForm(budget)}
-                      className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-600 transition-colors"
-                    >
-                      Details
-                    </button>
-                     <p className="text-[10px] font-bold text-slate-400">MAY REPORT</p>
-                  </div>
-                </motion.div>
+                  budget={budget}
+                  spent={budget.spent}
+                  icon={Icon}
+                  transactions={transactions}
+                  categoryIds={budget.categoryIds}
+                  onEdit={openEditBudgetForm}
+                  onDelete={handleDeleteBudget}
+                  delay={i * 0.05}
+                />
               );
             })}
           </div>

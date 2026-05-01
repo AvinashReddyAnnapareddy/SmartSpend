@@ -97,3 +97,70 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+# --- Group Schemas ---
+class GroupMemberResponse(BaseModel):
+    id: int
+    user_id: int
+    joined_at: datetime
+    user: Optional[UserBase] = None
+
+    class Config:
+        from_attributes = True
+
+class GroupBase(BaseModel):
+    name: str
+
+class GroupCreate(GroupBase):
+    pass
+
+class GroupResponse(GroupBase):
+    id: int
+    invite_code: str
+    created_by: int
+    created_at: datetime
+    members: List[GroupMemberResponse] = []
+
+    class Config:
+        from_attributes = True
+
+class GroupExpenseBase(BaseModel):
+    amount: float
+    description: str
+    is_settlement: bool = False
+
+class GroupExpenseCreate(GroupExpenseBase):
+    pass
+
+class GroupExpenseResponse(GroupExpenseBase):
+    id: int
+    group_id: int
+    paid_by: int
+    date: datetime
+    payer: Optional[UserBase] = None
+
+    class Config:
+        from_attributes = True
+
+class GroupBalance(BaseModel):
+    user_id: int
+    username: str
+    balance: float
+
+# --- Subscription Schemas ---
+class SubscriptionBase(BaseModel):
+    name: str
+    amount: float
+    billing_cycle: str = "MONTHLY"
+    next_billing_date: date
+
+class SubscriptionCreate(SubscriptionBase):
+    pass
+
+class SubscriptionResponse(SubscriptionBase):
+    id: int
+    user_id: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True

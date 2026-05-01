@@ -15,7 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from 'react';
-import { scanReceipt, getCategories, createTransaction, createCategory } from '../lib/api';
+import { scanReceipt, getCategories, createTransaction, createCategory, getSubscriptions, paySubscription } from '../lib/api';
 
 export default function AddExpense() {
   const navigate = useNavigate();
@@ -32,6 +32,11 @@ export default function AddExpense() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
+  // Subscription state
+  const [isSubscription, setIsSubscription] = useState(false);
+  const [existingSubscriptions, setExistingSubscriptions] = useState<any[]>([]);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<number | ''>('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchCategories = async () => {
@@ -46,8 +51,18 @@ export default function AddExpense() {
     }
   };
 
+  const fetchSubscriptions = async () => {
+    try {
+      const subs = await getSubscriptions();
+      setExistingSubscriptions(subs.filter((s: any) => s.is_active));
+    } catch (err) {
+      console.error("Failed to fetch subscriptions", err);
+    }
+  };
+
   useEffect(() => {
     fetchCategories();
+    fetchSubscriptions();
   }, []);
 
   const handleCreateCategory = async (e: FormEvent) => {
@@ -108,10 +123,15 @@ export default function AddExpense() {
         transaction_date: date,
         description: description || undefined
       });
+
+      if (isSubscription && selectedSubscriptionId) {
+        await paySubscription(Number(selectedSubscriptionId));
+      }
+
       navigate('/transactions');
     } catch (err) {
       console.error(err);
-      alert("Failed to save transaction.");
+      alert("Failed to save. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -277,6 +297,78 @@ export default function AddExpense() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Subscription Toggle */}
+            <div className="pt-4 border-t border-[#e2e8f0]">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={isSubscription}
+                    onChange={(e) => setIsSubscription(e.target.checked)}
+                  />
+                  <div className={`block w-10 h-6 rounded-full transition-colors ${isSubscription ? 'bg-brand-600' : 'bg-slate-200'}`}></div>
+                  <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${isSubscription ? 'transform translate-x-4' : ''}`}></div>
+                </div>
+                <span className="text-[12px] font-bold text-slate-700">This is a subscription payment</span>
+              </label>
+
+              <AnimatePresence>
+                {isSubscription && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden mt-4"
+                  >
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Choose Subscription</label>
+                        <div className="relative">
+                          <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                          <select
+                            value={selectedSubscriptionId.toString()}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '') {
+                                setSelectedSubscriptionId('');
+                                return;
+                              }
+                              const id = Number(val);
+                              setSelectedSubscriptionId(id);
+                              const sub = existingSubscriptions.find(s => s.id === id);
+                              if (sub) {
+                                setAmount(sub.amount.toString());
+                                setDescription(`${sub.name} Subscription Payment`);
+                              }
+                            }}
+                            required={isSubscription}
+                            className="w-full bg-white border border-[#e2e8f0] rounded-lg pl-9 pr-8 py-2.5 text-[13px] font-bold focus:ring-0 outline-none appearance-none"
+                          >
+                            <option value="">Select a subscription</option>
+                            {existingSubscriptions.map(sub => (
+                              <option key={sub.id} value={sub.id.toString()}>{sub.name} (₹{sub.amount})</option>
+                            ))}
+                          </select>
+                          <ChevronLeft className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rotate-[-90deg] text-slate-400 pointer-events-none" />
+                        </div>
+                      </div>
+                      {isSubscription && existingSubscriptions.length === 0 && (
+                        <div className="text-[11px] text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100 font-medium">
+                          No active subscriptions found. You can manage them in the Subscriptions tab.
+                        </div>
+                      )}
+                      {selectedSubscriptionId && (
+                        <div className="text-[11px] text-slate-500 italic bg-white p-2 rounded border border-slate-100">
+                          Paying for this will automatically update the next renewal date based on its billing cycle.
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             <div className="pt-6">

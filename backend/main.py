@@ -123,6 +123,13 @@ def update_budget(budget_id: int, budget_update: schemas.BudgetUpdate, db: Sessi
         raise HTTPException(status_code=404, detail="Budget not found")
     return updated
 
+@app.delete("/budgets/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_budget(budget_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    success = crud.delete_budget(db=db, budget_id=budget_id, user_id=current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    return None
+
 # --- Transactions ---
 @app.post("/transactions/", response_model=schemas.TransactionResponse)
 def create_transaction(transaction: schemas.TransactionCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -213,3 +220,81 @@ async def scan_receipt(file: UploadFile = File(...), current_user: models.User =
         return {"extracted_text": text, "suggested_amount": amount}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Groups ---
+@app.post("/groups/", response_model=schemas.GroupResponse)
+def create_group(group: schemas.GroupCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.create_group(db=db, group=group, user_id=current_user.id)
+
+@app.post("/groups/join", response_model=schemas.GroupResponse)
+def join_group(invite_code: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    group = crud.join_group(db=db, invite_code=invite_code, user_id=current_user.id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Invalid invite code or group not found")
+    return group
+
+@app.get("/groups/", response_model=List[schemas.GroupResponse])
+def get_user_groups(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.get_user_groups(db=db, user_id=current_user.id)
+
+@app.get("/groups/{group_id}", response_model=schemas.GroupResponse)
+def get_group(group_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    group = crud.get_group(db=db, group_id=group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    # Basic check if user is in group
+    is_member = any(m.user_id == current_user.id for m in group.members)
+    if not is_member:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    return group
+
+@app.post("/groups/{group_id}/expenses", response_model=schemas.GroupExpenseResponse)
+def create_group_expense(group_id: int, expense: schemas.GroupExpenseCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Check if member
+    group = crud.get_group(db=db, group_id=group_id)
+    if not group or not any(m.user_id == current_user.id for m in group.members):
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+        
+    return crud.create_group_expense(db=db, expense=expense, group_id=group_id, user_id=current_user.id)
+
+@app.get("/groups/{group_id}/expenses", response_model=List[schemas.GroupExpenseResponse])
+def get_group_expenses(group_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Check if member
+    group = crud.get_group(db=db, group_id=group_id)
+    if not group or not any(m.user_id == current_user.id for m in group.members):
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+        
+    return crud.get_group_expenses(db=db, group_id=group_id)
+
+@app.get("/groups/{group_id}/balances", response_model=List[schemas.GroupBalance])
+def get_group_balances(group_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Check if member
+    group = crud.get_group(db=db, group_id=group_id)
+    if not group or not any(m.user_id == current_user.id for m in group.members):
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+        
+    return crud.get_group_balances(db=db, group_id=group_id)
+
+# --- Subscriptions ---
+@app.post("/subscriptions/", response_model=schemas.SubscriptionResponse)
+def create_subscription(subscription: schemas.SubscriptionCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.create_subscription(db=db, subscription=subscription, user_id=current_user.id)
+
+@app.get("/subscriptions/", response_model=List[schemas.SubscriptionResponse])
+def get_subscriptions(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.get_subscriptions(db=db, user_id=current_user.id)
+
+@app.delete("/subscriptions/{sub_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_subscription(sub_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    success = crud.delete_subscription(db=db, sub_id=sub_id, user_id=current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return None
+
+@app.post("/subscriptions/{sub_id}/pay", response_model=schemas.SubscriptionResponse)
+def pay_subscription(sub_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    sub = crud.update_subscription_next_billing(db=db, sub_id=sub_id, user_id=current_user.id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return sub
+

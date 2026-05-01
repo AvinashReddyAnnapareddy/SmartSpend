@@ -45,6 +45,17 @@ def seed_database():
                     monthly_budget_limit=c["limit"]
                 ), user.id)
                 user_categories.append(cat)
+                
+                if c["limit"] is not None:
+                    from schemas import BudgetCreate
+                    try:
+                        crud.create_budget(db, BudgetCreate(
+                            name=c["name"],
+                            amount=c["limit"],
+                            category_ids=[cat.id]
+                        ), user.id)
+                    except ValueError:
+                        pass
             
             # Create some transactions
             print(f"Creating transactions for {user.username}...")

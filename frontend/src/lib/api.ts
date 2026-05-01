@@ -13,6 +13,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Error interceptor to provide better error messages
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      // Server responded with error status
+      const message = error.response.data?.detail || error.response.data?.message || error.response.statusText;
+      console.error(`API Error [${error.response.status}]:`, message);
+    } else if (error.request) {
+      console.error('API Error: No response received', error.request);
+    } else {
+      console.error('API Error:', error.message);
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const getTransactions = async () => {
   const response = await api.get('/transactions/');
   return response.data;
@@ -38,6 +55,11 @@ export const updateBudget = async (
   data: { name?: string; amount?: number; category_ids?: number[] }
 ) => {
   const response = await api.put(`/budgets/${budgetId}`, data);
+  return response.data;
+};
+
+export const deleteBudget = async (budgetId: number) => {
+  const response = await api.delete(`/budgets/${budgetId}`);
   return response.data;
 };
 
@@ -77,6 +99,63 @@ export const createTransaction = async (data: { category_id: number, amount: num
 
 export const getMe = async () => {
   const response = await api.get('/users/me/');
+  return response.data;
+};
+
+// --- Groups ---
+export const createGroup = async (data: { name: string }) => {
+  const response = await api.post('/groups/', data);
+  return response.data;
+};
+
+export const joinGroup = async (inviteCode: string) => {
+  const response = await api.post(`/groups/join?invite_code=${inviteCode}`);
+  return response.data;
+};
+
+export const getGroups = async () => {
+  const response = await api.get('/groups/');
+  return response.data;
+};
+
+export const getGroupDetails = async (groupId: number) => {
+  const response = await api.get(`/groups/${groupId}`);
+  return response.data;
+};
+
+export const addGroupExpense = async (groupId: number, data: { amount: number; description: string; is_settlement?: boolean }) => {
+  const response = await api.post(`/groups/${groupId}/expenses`, data);
+  return response.data;
+};
+
+export const getGroupExpenses = async (groupId: number) => {
+  const response = await api.get(`/groups/${groupId}/expenses`);
+  return response.data;
+};
+
+export const getGroupBalances = async (groupId: number) => {
+  const response = await api.get(`/groups/${groupId}/balances`);
+  return response.data;
+};
+
+// --- Subscriptions ---
+export const getSubscriptions = async () => {
+  const response = await api.get('/subscriptions/');
+  return response.data;
+};
+
+export const createSubscription = async (data: { name: string; amount: number; billing_cycle: string; next_billing_date: string }) => {
+  const response = await api.post('/subscriptions/', data);
+  return response.data;
+};
+
+export const deleteSubscription = async (subId: number) => {
+  const response = await api.delete(`/subscriptions/${subId}`);
+  return response.data;
+};
+
+export const paySubscription = async (subId: number) => {
+  const response = await api.post(`/subscriptions/${subId}/pay`);
   return response.data;
 };
 

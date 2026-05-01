@@ -111,3 +111,41 @@ class Subscription(Base):
     is_active = Column(Boolean, default=True)
 
     owner = relationship("User", back_populates="subscriptions")
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    invite_code = Column(String, unique=True, index=True, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    owner = relationship("User", foreign_keys=[created_by])
+    members = relationship("GroupMember", back_populates="group")
+    expenses = relationship("GroupExpense", back_populates="group")
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    joined_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    group = relationship("Group", back_populates="members")
+    user = relationship("User")
+
+class GroupExpense(Base):
+    __tablename__ = "group_expenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"))
+    paid_by = Column(Integer, ForeignKey("users.id"))
+    amount = Column(Float, nullable=False)
+    description = Column(String, nullable=False)
+    date = Column(DateTime(timezone=True), server_default=func.now())
+    is_settlement = Column(Boolean, default=False)
+
+    group = relationship("Group", back_populates="expenses")
+    payer = relationship("User")

@@ -10,7 +10,6 @@ import {
   Settings,
   Trophy,
   Plus,
-  ScanLine,
   LogOut,
   ChevronRight
 } from 'lucide-react';
@@ -64,16 +63,6 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto px-6 py-6 border-t border-white/10">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white">
-            AV
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white leading-none mb-1"></p>
-            <p className="text-[11px] text-slate-500 font-medium">Pro Plan</p>
-          </div>
-        </div>
-
         <div className="space-y-4">
           <p className="text-[10px] font-bold text-slate-500 tracking-widest uppercase mb-2">Quick Actions</p>
           <div className="space-y-1">
@@ -81,10 +70,6 @@ export function Sidebar() {
               <Plus className="w-4 h-4 text-slate-500 group-hover:text-brand-600" />
               <span>Add Expense</span>
             </NavLink>
-            <button className="w-full flex items-center gap-3 px-3 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all group">
-              <ScanLine className="w-4 h-4 text-slate-500 group-hover:text-brand-600" />
-              <span>Scan Receipt</span>
-            </button>
           </div>
         </div>
       </div>
