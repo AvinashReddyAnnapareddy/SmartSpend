@@ -6,6 +6,9 @@ export interface UserProfile {
   id: number;
   username: string;
   email: string;
+  full_name?: string;
+  phone_number?: string;
+  avatar_url?: string;
 }
 
 export interface Account {
@@ -21,6 +24,7 @@ export interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshProfile: () => Promise<void>;
   switchAccount: (username: string) => void;
   removeAccount: (username: string) => void;
   isAuthenticated: boolean;
@@ -136,6 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshProfile = async () => {
+    if (token) {
+      await fetchProfile(token);
+    }
+  };
+
   const value = useMemo<AuthContextValue>(() => ({
     token,
     user,
@@ -143,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     register,
     logout,
+    refreshProfile,
     switchAccount,
     removeAccount,
     isAuthenticated: !!token,

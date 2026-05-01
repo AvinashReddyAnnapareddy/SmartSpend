@@ -65,6 +65,29 @@ export default function AddExpense() {
     fetchSubscriptions();
   }, []);
 
+  useEffect(() => {
+    const handleSubscriptionCategory = async () => {
+      if (isSubscription) {
+        const subCat = categories.find(c => c.name.toLowerCase() === 'subscription');
+        if (subCat) {
+          setCategoryId(subCat.id);
+        } else if (categories.length > 0) { // Only try to create if initial fetch is done
+          try {
+            const newCat = await createCategory({
+              name: 'Subscription',
+              transaction_type: 'EXPENSE'
+            });
+            setCategories(prev => [...prev, newCat]);
+            setCategoryId(newCat.id);
+          } catch (err) {
+            console.error("Failed to create Subscription category", err);
+          }
+        }
+      }
+    };
+    handleSubscriptionCategory();
+  }, [isSubscription]);
+
   const handleCreateCategory = async (e: FormEvent) => {
     e.preventDefault();
     if (!newCategoryName) return;
@@ -139,7 +162,7 @@ export default function AddExpense() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#f4f5f7]">
-      <Header title="Add Expense" />
+      <Header title="Add Transaction" />
 
       <div className="p-6 h-[calc(100vh-64px)] overflow-y-auto max-w-xl mx-auto w-full pb-12">
         <button

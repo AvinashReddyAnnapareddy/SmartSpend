@@ -5,11 +5,11 @@ import Transactions from './pages/Transactions';
 import Budgets from './pages/Budgets';
 import Subscriptions from './pages/Subscriptions';
 import Alerts from './pages/Alerts';
-import Settings from './pages/Settings';
 import AddExpense from './pages/AddExpense';
 import Groups from './pages/Groups';
 import Categories from './pages/Categories';
 import Login from './pages/Login';
+import Profile from './pages/Profile';
 import { useAuth } from './lib/useAuth';
 
 export default function App() {
@@ -44,7 +44,7 @@ export default function App() {
                   <Route path="/groups" element={<Groups />} />
                   <Route path="/subscriptions" element={<Subscriptions />} />
                   <Route path="/alerts" element={<Alerts />} />
-                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/profile" element={<Profile />} />
                   <Route path="/add-expense" element={<AddExpense />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

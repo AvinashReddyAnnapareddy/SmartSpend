@@ -17,10 +17,31 @@ def get_user_by_username(db: Session, username: str):
 
 def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = get_password_hash(user.password)
-    db_user = models.User(username=user.username, email=user.email, password_hash=hashed_password)
+    db_user = models.User(
+        username=user.username, 
+        email=user.email, 
+        password_hash=hashed_password,
+        full_name=user.full_name,
+        phone_number=user.phone_number,
+        avatar_url=user.avatar_url
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    return db_user
+
+def update_user(db: Session, user_id: int, user_update: schemas.UserUpdate):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        return None
+    
+    update_data = user_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+    
+    db.commit()
+    db.refresh(db_user)
+    return db_user
     
     # Add default categories
     default_categories = [
@@ -61,7 +82,35 @@ def create_transaction(db: Session, transaction: schemas.TransactionCreate, user
     return db_transaction
 
 def get_transactions(db: Session, user_id: int, skip: int = 0, limit: int = 100):
-    return db.query(models.Transaction).filter(models.Transaction.user_id == user_id).order_by(models.Transaction.transaction_date.desc()).offset(skip).limit(limit).all()
+    return db.query(models.Transaction).filter(models.Transaction.user_id == user_id).order_by(models.Transaction.transaction_date.desc(), models.Transaction.id.desc()).offset(skip).limit(limit).all()
+
+def update_transaction(db: Session, transaction_id: int, transaction_update: schemas.TransactionUpdate, user_id: int):
+    db_tx = db.query(models.Transaction).filter(models.Transaction.id == transaction_id, models.Transaction.user_id == user_id).first()
+    if not db_tx:
+        return None
+    
+    if transaction_update.category_id is not None:
+        db_tx.category_id = transaction_update.category_id
+    if transaction_update.amount is not None:
+        db_tx.amount = transaction_update.amount
+    if transaction_update.transaction_date is not None:
+        db_tx.transaction_date = transaction_update.transaction_date
+    if transaction_update.description is not None:
+        db_tx.description = transaction_update.description
+    if transaction_update.currency is not None:
+        db_tx.currency = transaction_update.currency
+        
+    db.commit()
+    db.refresh(db_tx)
+    return db_tx
+
+def delete_transaction(db: Session, transaction_id: int, user_id: int):
+    db_tx = db.query(models.Transaction).filter(models.Transaction.id == transaction_id, models.Transaction.user_id == user_id).first()
+    if not db_tx:
+        return False
+    db.delete(db_tx)
+    db.commit()
+    return True
 
 def get_budget_alerts(db: Session, user_id: int):
     return db.query(models.BudgetAlert).filter(models.BudgetAlert.user_id == user_id).order_by(models.BudgetAlert.alert_date.desc()).all()
@@ -335,6 +384,18 @@ def update_subscription_next_billing(db: Session, sub_id: int, user_id: int):
         
         db_sub.next_billing_date = datetime.date(year, month, day)
         
+    elif db_sub.billing_cycle == "QUARTERLY":
+        # Calculate next 3 months
+        month = current_date.month + 3
+        year = current_date.year
+        if month > 12:
+            month -= 12
+            year += 1
+        
+        last_day_of_month = calendar.monthrange(year, month)[1]
+        day = min(current_date.day, last_day_of_month)
+        db_sub.next_billing_date = datetime.date(year, month, day)
+        
     elif db_sub.billing_cycle == "YEARLY":
         # Calculate next year
         year = current_date.year + 1
@@ -344,7 +405,7 @@ def update_subscription_next_billing(db: Session, sub_id: int, user_id: int):
         # Handle leap year (Feb 29 -> Feb 28)
         if month == 2 and day == 29 and not calendar.isleap(year):
             day = 28
-            
+        
         db_sub.next_billing_date = datetime.date(year, month, day)
     
     db.commit()

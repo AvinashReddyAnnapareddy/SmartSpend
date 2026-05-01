@@ -18,6 +18,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
+      // Handle 401 Unauthorized errors
+      if (error.response.status === 401 && !error.config.url?.includes('/token')) {
+        localStorage.removeItem('token');
+        // We can't use useNavigate here as it's not a component
+        // but we can use window.location
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
+
       // Server responded with error status
       const message = error.response.data?.detail || error.response.data?.message || error.response.statusText;
       console.error(`API Error [${error.response.status}]:`, message);
@@ -29,6 +39,16 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const getUserProfile = async () => {
+  const response = await api.get('/users/me/');
+  return response.data;
+};
+
+export const updateUserProfile = async (data: { full_name?: string; email?: string; phone_number?: string; avatar_url?: string }) => {
+  const response = await api.put('/users/me/', data);
+  return response.data;
+};
 
 export const getTransactions = async () => {
   const response = await api.get('/transactions/');
@@ -94,6 +114,16 @@ export const createCategory = async (data: { name: string, transaction_type: 'IN
 
 export const createTransaction = async (data: { category_id: number, amount: number, transaction_date: string, description?: string }) => {
   const response = await api.post('/transactions/', data);
+  return response.data;
+};
+
+export const updateTransaction = async (id: number, data: { category_id?: number, amount?: number, transaction_date?: string, description?: string }) => {
+  const response = await api.put(`/transactions/${id}`, data);
+  return response.data;
+};
+
+export const deleteTransaction = async (id: number) => {
+  const response = await api.delete(`/transactions/${id}`);
   return response.data;
 };
 

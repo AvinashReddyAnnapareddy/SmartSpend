@@ -7,7 +7,7 @@ import {
   Users2,
   CreditCard,
   Bell,
-  Settings,
+  User,
   Trophy,
   Plus,
   LogOut,
@@ -23,19 +23,19 @@ const navItems = [
   { icon: Users2, label: 'Groups', path: '/groups' },
   { icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' },
   { icon: Bell, label: 'Alerts', path: '/alerts' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
+  { icon: User, label: 'Profile', path: '/profile' },
 ];
 
 export function Sidebar() {
   return (
     <aside className="w-[240px] bg-[#0f172a] text-slate-400 h-screen fixed left-0 top-0 flex flex-col z-50">
       <div className="py-6 mb-4">
-        <div className="flex items-center gap-3 px-6">
+        <NavLink to="/" className="flex items-center gap-3 px-6 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-lg shadow-brand-600/20">
             <Wallet className="w-5 h-5 text-white" />
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">SmartSpend</h1>
-        </div>
+        </NavLink>
       </div>
 
       <nav className="flex-1 space-y-0.5">
@@ -68,7 +68,7 @@ export function Sidebar() {
           <div className="space-y-1">
             <NavLink to="/add-expense" className="w-full flex items-center gap-3 px-3 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all group">
               <Plus className="w-4 h-4 text-slate-500 group-hover:text-brand-600" />
-              <span>Add Expense</span>
+              <span>Add Transaction</span>
             </NavLink>
           </div>
         </div>

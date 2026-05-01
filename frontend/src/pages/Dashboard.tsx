@@ -31,9 +31,9 @@ import { formatCurrency, cn, formatDate } from '../lib/utils';
 import { motion } from 'motion/react';
 
 export default function Dashboard() {
-  const [transactions, setTransactions] = useState([]);
-  const [spendingByCategory, setSpendingByCategory] = useState([]);
-  const [monthlyOverview, setMonthlyOverview] = useState([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [spendingByCategory, setSpendingByCategory] = useState<any[]>([]);
+  const [monthlyOverview, setMonthlyOverview] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -58,8 +58,8 @@ export default function Dashboard() {
 
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading dashboard data...</div>;
 
-  const totalSpent = transactions.filter(t => t.category.transaction_type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
-  const totalReceived = transactions.filter(t => t.category.transaction_type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
+  const totalSpent = transactions.filter(t => t.category?.transaction_type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
+  const totalReceived = transactions.filter(t => t.category?.transaction_type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
   const totalBalance = totalReceived - totalSpent;
   const savingsRate = totalReceived > 0 ? Math.round(((totalReceived - totalSpent) / totalReceived) * 100) : 0;
 
@@ -204,20 +204,20 @@ export default function Dashboard() {
                 <div key={tx.id} className="p-3.5 px-5 hover:bg-slate-50 transition-colors flex items-center gap-4 group">
                   <div className={cn(
                     "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-[#e2e8f0]",
-                    tx.category.transaction_type === 'INCOME' ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"
+                    tx.category?.transaction_type === 'INCOME' ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"
                   )}>
-                    {tx.category.transaction_type === 'INCOME' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                    {tx.category?.transaction_type === 'INCOME' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-bold text-[#1e293b] truncate leading-tight mb-0.5">{tx.description}</p>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{tx.category.name}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{tx.category?.name}</p>
                   </div>
                   <div className="text-right">
                     <p className={cn(
                       "text-[13px] font-bold font-mono tracking-tight leading-tight",
-                      tx.category.transaction_type === 'INCOME' ? "text-emerald-600" : "text-[#1e293b]"
+                      tx.category?.transaction_type === 'INCOME' ? "text-emerald-600" : "text-[#1e293b]"
                     )}>
-                      {tx.category.transaction_type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
+                      {tx.category?.transaction_type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
                     </p>
                     <p className="text-[10px] text-slate-400 font-medium">{formatDate(tx.transaction_date)}</p>
                   </div>
@@ -254,28 +254,6 @@ export default function Dashboard() {
                     <Tooltip contentStyle={{ display: 'none' }} />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
-            </motion.div>
-
-            <motion.div 
-               initial={{ opacity: 0, x: 10 }}
-               animate={{ opacity: 1, x: 0 }}
-               className="bg-[#0F172A] p-5 rounded-xl border border-slate-800 shadow-none overflow-hidden relative group"
-            >
-              <div className="absolute top-0 right-0 w-24 h-24 bg-brand-600/10 rounded-full blur-2xl -mr-12 -mt-12" />
-              <div className="relative z-10 flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-brand-600/20 rounded-lg flex items-center justify-center">
-                    <HeartPulse className="w-4 h-4 text-brand-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-white text-[13px] font-bold tracking-tight leading-tight">Smart Tip</h3>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-400 leading-normal">Save <span className="text-emerald-400 font-bold font-mono">₹840</span> by reviewing subscriptions.</p>
-                <button className="w-full py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider">
-                  Review
-                </button>
               </div>
             </motion.div>
           </div>

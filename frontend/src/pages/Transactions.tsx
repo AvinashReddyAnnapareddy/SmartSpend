@@ -1,6 +1,6 @@
 import { Header } from '../components/Header';
 import { useState, useEffect } from 'react';
-import { getTransactions, getSpendingByCategory } from '../lib/api';
+import { getTransactions, getSpendingByCategory, updateTransaction, deleteTransaction, getCategories } from '../lib/api';
 import { 
   Search, 
   Filter, 
@@ -20,22 +20,47 @@ import { formatCurrency, cn, formatDate } from '../lib/utils';
 import { motion } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function Transactions() {
   const navigate = useNavigate();
-  const [transactions, setTransactions] = useState([]);
-  const [spendingByCategory, setSpendingByCategory] = useState([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [spendingByCategory, setSpendingByCategory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Edit/Delete state
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
+  const [formAmount, setFormAmount] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formCategoryId, setFormCategoryId] = useState<number | ''>('');
+  const [formDate, setFormDate] = useState('');
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter, searchQuery, currentMonth, currentYear]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [txs, spending] = await Promise.all([
+        const [txs, spending, cats] = await Promise.all([
           getTransactions(),
-          getSpendingByCategory()
+          getSpendingByCategory(),
+          getCategories()
         ]);
         setTransactions(txs);
         setSpendingByCategory(spending);
+        setCategories(cats);
       } catch (error) {
         console.error("Failed to fetch data", error);
       } finally {
@@ -54,9 +79,112 @@ export default function Transactions() {
     amount: cat.amount
   }));
 
-  const totalSpent = transactions.filter(t => t.category.transaction_type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
-  const totalReceived = transactions.filter(t => t.category.transaction_type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
+  const totalSpent = transactions.filter(t => t.category?.transaction_type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
+  const totalReceived = transactions.filter(t => t.category?.transaction_type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
   const netFlow = totalReceived - totalSpent;
+
+  const handleDelete = async (id: number) => {
+    if (window.confirm('Are you sure you want to delete this transaction?')) {
+      try {
+        await deleteTransaction(id);
+        const [newTxs, newSpending] = await Promise.all([getTransactions(), getSpendingByCategory()]);
+        setTransactions(newTxs);
+        setSpendingByCategory(newSpending);
+      } catch (err) {
+        alert('Failed to delete transaction');
+      }
+    }
+  };
+
+  const openEditModal = (tx: any) => {
+    setEditingTransaction(tx);
+    setFormAmount(tx.amount.toString());
+    setFormDescription(tx.description || '');
+    setFormCategoryId(tx.category?.id || '');
+    setFormDate(tx.transaction_date);
+    setIsEditModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const handleEditSave = async () => {
+    if (!formAmount || !formCategoryId || !formDate) {
+      alert("Please fill required fields");
+      return;
+    }
+    try {
+      await updateTransaction(editingTransaction.id, {
+        amount: parseFloat(formAmount),
+        category_id: Number(formCategoryId),
+        transaction_date: formDate,
+        description: formDescription || undefined
+      });
+      setIsEditModalOpen(false);
+      setEditingTransaction(null);
+      const [newTxs, newSpending] = await Promise.all([getTransactions(), getSpendingByCategory()]);
+      setTransactions(newTxs);
+      setSpendingByCategory(newSpending);
+    } catch (err) {
+      alert('Failed to update transaction');
+    }
+  };
+
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const sortedAndFilteredTransactions = [...transactions]
+    .filter(tx => {
+      if (activeFilter === 'Income' && tx.category?.transaction_type !== 'INCOME') return false;
+      if (activeFilter === 'Expense' && tx.category?.transaction_type !== 'EXPENSE') return false;
+      
+      const txDate = new Date(tx.transaction_date);
+      if (txDate.getMonth() !== currentMonth || txDate.getFullYear() !== currentYear) return false;
+      
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const descMatch = tx.description?.toLowerCase().includes(q);
+        const merchantMatch = tx.merchant?.toLowerCase().includes(q);
+        const catMatch = tx.category?.name?.toLowerCase().includes(q);
+        if (!descMatch && !merchantMatch && !catMatch) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      let aVal, bVal;
+      if (sortConfig.key === 'date') {
+        aVal = new Date(a.transaction_date).getTime();
+        bVal = new Date(b.transaction_date).getTime();
+      } else if (sortConfig.key === 'amount') {
+        aVal = a.amount;
+        bVal = b.amount;
+      } else if (sortConfig.key === 'description') {
+        aVal = a.description?.toLowerCase() || '';
+        bVal = b.description?.toLowerCase() || '';
+      } else if (sortConfig.key === 'category') {
+        aVal = a.category?.name?.toLowerCase() || '';
+        bVal = b.category?.name?.toLowerCase() || '';
+      } else {
+        return 0;
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      
+      // Secondary sort by ID to ensure consistent ordering and latest items at top when dates are equal
+      if (sortConfig.key === 'date') {
+        return sortConfig.direction === 'asc' ? a.id - b.id : b.id - a.id;
+      }
+      return 0;
+    });
+
+  const totalPages = Math.ceil(sortedAndFilteredTransactions.length / itemsPerPage);
+  const currentTransactions = sortedAndFilteredTransactions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const quickStats = [
     { label: 'Transactions', value: transactions.length.toString(), change: '', variant: 'info' },
@@ -64,6 +192,40 @@ export default function Transactions() {
     { label: 'Total Received', value: formatCurrency(totalReceived), change: '', variant: 'success' },
     { label: 'Net Flow', value: formatCurrency(netFlow), change: '', variant: 'brand' }
   ];
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(18);
+    doc.text('Transactions Report', 14, 22);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const periodStr = `${monthNames[currentMonth]} ${currentYear}`;
+    doc.text(`Period: ${periodStr} | Filter: ${activeFilter} | Total: ${sortedAndFilteredTransactions.length} transactions`, 14, 30);
+    
+    const tableColumn = ["Date", "Description", "Category", "Type", "Amount"];
+    const tableRows = sortedAndFilteredTransactions.map(tx => [
+      formatDate(tx.transaction_date),
+      tx.description || '-',
+      tx.category?.name || '-',
+      tx.category?.transaction_type === 'INCOME' ? 'Income' : 'Expense',
+      `${tx.category?.transaction_type === 'INCOME' ? '+' : '-'}${formatCurrency(tx.amount)}`
+    ]);
+    
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 40,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] }
+    });
+    
+    doc.save(`smartspend_transactions_${currentYear}_${currentMonth + 1}.pdf`);
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#f4f5f7]">
       <Header title="Transactions" />
@@ -74,12 +236,13 @@ export default function Transactions() {
           <div className="bg-white p-3.5 rounded-xl border border-[#e2e8f0] flex items-center justify-between mb-5 flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <div className="flex bg-[#f1f5f9] p-1 rounded-lg">
-                {['All', 'Income', 'Expense', 'Transfer'].map((tab) => (
+                {['All', 'Income', 'Expense'].map((tab) => (
                   <button 
                     key={tab} 
+                    onClick={() => setActiveFilter(tab)}
                     className={cn(
                       "px-3 py-1 rounded-md text-[11px] font-bold transition-all",
-                      tab === 'All' ? "bg-white text-[#1e293b] shadow-sm border border-[#e2e8f0]" : "text-slate-500 hover:text-slate-900"
+                      activeFilter === tab ? "bg-white text-[#1e293b] shadow-sm border border-[#e2e8f0]" : "text-slate-500 hover:text-slate-900"
                     )}
                   >
                     {tab}
@@ -87,10 +250,19 @@ export default function Transactions() {
                 ))}
               </div>
               <div className="h-6 w-[1px] bg-slate-200 mx-1" />
-              <button className="flex items-center gap-2 px-2.5 py-1.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg text-[11px] font-bold text-slate-600">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg text-[11px] font-bold text-slate-600">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span>May 1 - May 31</span>
-              </button>
+                <input 
+                  type="month" 
+                  value={`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    const [y, m] = e.target.value.split('-');
+                    setCurrentYear(Number(y));
+                    setCurrentMonth(Number(m) - 1);
+                  }}
+                  className="bg-transparent outline-none cursor-pointer text-slate-600"
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -99,9 +271,18 @@ export default function Transactions() {
                 <input 
                   type="text" 
                   placeholder="Search..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-48 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg pl-9 pr-4 py-1.5 text-[11px] focus:ring-1 focus:ring-brand-600/40 outline-none"
                 />
               </div>
+              <button
+                onClick={exportToPDF}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-bold transition-all shadow-none"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export</span>
+              </button>
               <button
                 onClick={() => navigate('/add-expense')}
                 className="flex items-center gap-2 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-none"
@@ -142,15 +323,30 @@ export default function Transactions() {
               <table className="w-full text-left">
                 <thead className="bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-0 z-10">
                   <tr>
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date</th>
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</th>
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Category</th>
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Amount</th>
+                    <th onClick={() => handleSort('date')} className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors">
+                      Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th onClick={() => handleSort('description')} className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors">
+                      Description {sortConfig.key === 'description' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th onClick={() => handleSort('category')} className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors">
+                      Category {sortConfig.key === 'category' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th onClick={() => handleSort('amount')} className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right cursor-pointer hover:bg-slate-100 transition-colors">
+                      Amount {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
                     <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e2e8f0]">
-                  {transactions.map((tx) => (
+                  {currentTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-8 text-center text-slate-500 text-sm">
+                        No transactions found.
+                      </td>
+                    </tr>
+                  ) : (
+                    currentTransactions.map((tx) => (
                     <tr key={tx.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-5 py-3">
                         <p className="text-[11px] font-bold text-[#1e293b]">{formatDate(tx.transaction_date)}</p>
@@ -175,39 +371,76 @@ export default function Transactions() {
                           {tx.category.name}
                         </span>
                       </td>
-                      <td className={cn(
-                        "px-5 py-3 text-[13px] font-bold font-mono text-right",
-                        tx.category.transaction_type === 'INCOME' ? "text-emerald-600" : "text-[#1e293b]"
-                      )}>
-                        {tx.category.transaction_type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
+                      <td className="px-5 py-3 text-[13px] font-bold font-mono text-right text-[#1e293b]">
+                        {tx.category?.transaction_type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
                       </td>
-                      <td className="px-5 py-3 text-right">
-                        <button className="p-1 hover:bg-slate-200 rounded text-slate-400 opacity-0 group-hover:opacity-100 transition-all">
+                      <td className="px-5 py-3 text-right relative">
+                        <button 
+                          onClick={() => setActiveDropdown(activeDropdown === tx.id ? null : tx.id)}
+                          className="p-1 hover:bg-slate-200 rounded text-slate-400 transition-all"
+                        >
                           <MoreVertical className="w-4 h-4" />
                         </button>
+                        {activeDropdown === tx.id && (
+                          <div className="absolute right-8 top-10 w-32 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-50">
+                            <button 
+                              onClick={() => openEditModal(tx)}
+                              className="w-full text-left px-4 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setActiveDropdown(null);
+                                handleDelete(tx.id);
+                              }}
+                              className="w-full text-left px-4 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>
             
             {/* Pagination */}
             <div className="mt-auto p-4 border-t border-[#e2e8f0] flex items-center justify-between bg-white sticky bottom-0">
-               <p className="text-[11px] text-slate-500">Showing {Math.min(10, transactions.length)} of {transactions.length}</p>
+               <p className="text-[11px] text-slate-500">
+                 Showing {currentTransactions.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, sortedAndFilteredTransactions.length)} of {sortedAndFilteredTransactions.length}
+               </p>
                <div className="flex items-center gap-1">
-                 <button className="p-1.5 hover:bg-slate-100 rounded text-slate-400"><ChevronLeft className="w-4 h-4" /></button>
-                 <div className="flex items-center gap-1 mx-2">
-                   {[1, 2, 3].map(p => (
-                     <button key={p} className={cn(
-                       "w-7 h-7 rounded text-[11px] font-bold",
-                       p === 1 ? "bg-[#1e293b] text-white" : "text-slate-500 hover:bg-slate-50"
-                     )}>
+                 <button 
+                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                   disabled={currentPage === 1}
+                   className="p-1.5 hover:bg-slate-100 rounded text-slate-400 disabled:opacity-50 transition-opacity"
+                 >
+                   <ChevronLeft className="w-4 h-4" />
+                 </button>
+                 <div className="flex items-center gap-1 mx-2 overflow-x-auto max-w-[200px] scrollbar-hide">
+                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                     <button 
+                       key={p} 
+                       onClick={() => setCurrentPage(p)}
+                       className={cn(
+                         "w-7 h-7 shrink-0 rounded text-[11px] font-bold transition-colors",
+                         p === currentPage ? "bg-[#1e293b] text-white" : "text-slate-500 hover:bg-slate-50"
+                       )}
+                     >
                        {p}
                      </button>
                    ))}
                  </div>
-                 <button className="p-1.5 hover:bg-slate-100 rounded text-slate-400"><ChevronRight className="w-4 h-4" /></button>
+                 <button 
+                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                   disabled={currentPage === totalPages || totalPages === 0}
+                   className="p-1.5 hover:bg-slate-100 rounded text-slate-400 disabled:opacity-50 transition-opacity"
+                 >
+                   <ChevronRight className="w-4 h-4" />
+                 </button>
                </div>
             </div>
           </div>
@@ -284,18 +517,88 @@ export default function Transactions() {
             </div>
           </div>
           
-          <button className="w-full p-4 bg-[#0F172A] rounded-xl text-white flex flex-col items-center gap-3 border border-slate-800 relative group overflow-hidden">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-brand-600/10 rounded-full blur-2xl group-hover:bg-brand-600/20 transition-all shadow-none" />
-            <div className="w-8 h-8 bg-brand-600/20 rounded-lg flex items-center justify-center relative z-10">
-              <Download className="w-4 h-4 text-brand-600" />
-            </div>
-            <div className="text-center relative z-10">
-              <h4 className="text-[10px] font-bold uppercase tracking-[2px]">Export Data</h4>
-              <p className="text-[10px] text-slate-500 mt-1 font-medium">Monthly PDF Report</p>
-            </div>
-          </button>
         </aside>
       </div>
+
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden"
+          >
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[#1e293b]">Edit Transaction</h3>
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formAmount}
+                  onChange={(e) => setFormAmount(e.target.value)}
+                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-4 py-2.5 text-[13px] font-bold focus:ring-0 outline-none"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</label>
+                <input
+                  type="text"
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-4 py-2.5 text-[13px] font-bold focus:ring-0 outline-none"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</label>
+                <div className="relative">
+                  <select
+                    value={formCategoryId}
+                    onChange={(e) => setFormCategoryId(Number(e.target.value))}
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-4 py-2.5 text-[13px] font-bold focus:ring-0 outline-none appearance-none"
+                  >
+                    <option value="" disabled>Select category</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name} ({cat.transaction_type})</option>
+                    ))}
+                  </select>
+                  <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</label>
+                <input
+                  type="date"
+                  value={formDate}
+                  onChange={(e) => setFormDate(e.target.value)}
+                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-4 py-2.5 text-[13px] font-bold focus:ring-0 outline-none"
+                />
+              </div>
+            </div>
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-4 py-2 text-[12px] font-bold text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleEditSave}
+                className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[12px] font-bold transition-all shadow-sm"
+              >
+                Save Changes
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

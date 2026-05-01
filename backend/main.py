@@ -19,13 +19,13 @@ reader = easyocr.Reader(['en'])
 # Secret key for JWT
 SECRET_KEY = "your-secret-key-replace-in-production"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
 app = FastAPI(title="SmartSpend API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For dev, restrict in prod
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,6 +88,10 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 async def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
+@app.put("/users/me/", response_model=schemas.UserResponse)
+async def update_user_me(user_update: schemas.UserUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return crud.update_user(db=db, user_id=current_user.id, user_update=user_update)
+
 # --- Categories ---
 @app.post("/categories/", response_model=schemas.CategoryResponse)
 def create_category(category: schemas.CategoryCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -138,6 +142,20 @@ def create_transaction(transaction: schemas.TransactionCreate, db: Session = Dep
 @app.get("/transactions/", response_model=List[schemas.TransactionResponse])
 def read_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_transactions(db, user_id=current_user.id, skip=skip, limit=limit)
+
+@app.put("/transactions/{transaction_id}", response_model=schemas.TransactionResponse)
+def update_transaction(transaction_id: int, transaction_update: schemas.TransactionUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    updated = crud.update_transaction(db=db, transaction_id=transaction_id, transaction_update=transaction_update, user_id=current_user.id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return updated
+
+@app.delete("/transactions/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    success = crud.delete_transaction(db=db, transaction_id=transaction_id, user_id=current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return None
 
 # --- Analytics ---
 @app.get("/analytics/spending-by-category")

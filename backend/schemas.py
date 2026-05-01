@@ -7,9 +7,18 @@ from models import TransactionType
 class UserBase(BaseModel):
     username: str
     email: EmailStr
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone_number: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 class UserResponse(UserBase):
     id: int
@@ -70,6 +79,13 @@ class TransactionBase(BaseModel):
 
 class TransactionCreate(TransactionBase):
     pass
+
+class TransactionUpdate(BaseModel):
+    category_id: Optional[int] = None
+    amount: Optional[float] = None
+    transaction_date: Optional[date] = None
+    description: Optional[str] = None
+    currency: Optional[str] = None
 
 class TransactionResponse(TransactionBase):
     id: int

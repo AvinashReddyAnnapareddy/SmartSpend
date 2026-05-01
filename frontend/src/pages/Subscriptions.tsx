@@ -193,35 +193,62 @@ export default function Subscriptions() {
                  </thead>
                  <tbody className="divide-y divide-slate-50">
                     {activeTab === 'History' ? (
-                      historyTransactions.length === 0 ? (
+                      (historyTransactions.length === 0 && subscriptions.filter(s => !s.is_active).length === 0) ? (
                         <tr>
                           <td colSpan={5} className="px-6 py-8 text-center text-slate-500 text-sm">
-                            No payment history found.
+                            No subscription history found.
                           </td>
                         </tr>
                       ) : (
-                        historyTransactions.map(tx => {
-                          const serviceName = tx.description.replace(' Subscription Payment', '');
-                          const Icon = serviceIcons[serviceName] || LayoutGrid;
-                          return (
-                            <tr key={`tx-${tx.id}`} className="hover:bg-slate-50 transition-colors group">
-                               <td className="px-6 py-3">
-                                  <div className="flex items-center gap-3">
-                                     <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-slate-400 border border-slate-200 overflow-hidden">
-                                        <Icon className="w-4 h-4" />
-                                     </div>
-                                     <span className="text-[13px] font-bold text-[#1e293b]">{serviceName}</span>
-                                  </div>
-                               </td>
-                               <td className="px-6 py-3 text-[11px] text-slate-500 font-medium">-</td>
-                               <td className="px-6 py-3 font-bold text-slate-600 text-[11px]">Paid on {formatDate(tx.transaction_date)}</td>
-                               <td className="px-6 py-3 font-bold font-mono text-[#1e293b] text-[13px] text-right">{formatCurrency(tx.amount)}</td>
-                               <td className="px-6 py-3 text-right">
-                                 <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest px-2 py-1 bg-emerald-50 rounded">Paid</span>
-                               </td>
-                            </tr>
-                          );
-                        })
+                        <>
+                          {historyTransactions.map(tx => {
+                            const serviceName = tx.description.replace(' Subscription Payment', '');
+                            const Icon = serviceIcons[serviceName] || LayoutGrid;
+                            return (
+                              <tr key={`tx-${tx.id}`} className="hover:bg-slate-50 transition-colors group">
+                                 <td className="px-6 py-3">
+                                    <div className="flex items-center gap-3">
+                                       <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-slate-400 border border-slate-200 overflow-hidden">
+                                          <Icon className="w-4 h-4" />
+                                       </div>
+                                       <span className="text-[13px] font-bold text-[#1e293b]">{serviceName}</span>
+                                    </div>
+                                 </td>
+                                 <td className="px-6 py-3 text-[11px] text-slate-500 font-medium">-</td>
+                                 <td className="px-6 py-3 font-bold text-slate-600 text-[11px]">Paid on {formatDate(tx.transaction_date)}</td>
+                                 <td className="px-6 py-3 font-bold font-mono text-[#1e293b] text-[13px] text-right">{formatCurrency(tx.amount)}</td>
+                                 <td className="px-6 py-3 text-right">
+                                   <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest px-2 py-1 bg-emerald-50 rounded">Paid</span>
+                                 </td>
+                              </tr>
+                            );
+                          })}
+                          {subscriptions.filter(s => !s.is_active).map(sub => {
+                            const Icon = serviceIcons[sub.name] || LayoutGrid;
+                            return (
+                              <tr key={`inactive-${sub.id}`} className="hover:bg-slate-50 transition-colors group opacity-75">
+                                 <td className="px-6 py-3">
+                                    <div className="flex items-center gap-3">
+                                       <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-slate-400 border border-slate-200 overflow-hidden">
+                                          <Icon className="w-4 h-4" />
+                                       </div>
+                                       <span className="text-[13px] font-bold text-[#1e293b]">{sub.name}</span>
+                                    </div>
+                                 </td>
+                                 <td className="px-6 py-3 text-[11px] text-slate-500 font-medium">
+                                   {sub.billing_cycle === 'MONTHLY' ? 'Monthly' : 
+                                    sub.billing_cycle === 'QUARTERLY' ? '3 Months' : 
+                                    sub.billing_cycle === 'YEARLY' ? 'Yearly' : sub.billing_cycle}
+                                 </td>
+                                 <td className="px-6 py-3 font-bold text-slate-500 text-[11px]">No longer active</td>
+                                 <td className="px-6 py-3 font-bold font-mono text-slate-400 text-[13px] text-right">{formatCurrency(sub.amount)}</td>
+                                 <td className="px-6 py-3 text-right">
+                                   <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest px-2 py-1 bg-rose-50 rounded">Cancelled</span>
+                                 </td>
+                              </tr>
+                            );
+                          })}
+                        </>
                       )
                     ) : filteredSubscriptions.length === 0 ? (
                       <tr>
@@ -242,7 +269,11 @@ export default function Subscriptions() {
                                    <span className="text-[13px] font-bold text-[#1e293b]">{sub.name}</span>
                                 </div>
                              </td>
-                             <td className="px-6 py-3 text-[11px] text-slate-500 font-medium">{sub.billing_cycle}</td>
+                             <td className="px-6 py-3 text-[11px] text-slate-500 font-medium">
+                               {sub.billing_cycle === 'MONTHLY' ? 'Monthly' : 
+                                sub.billing_cycle === 'QUARTERLY' ? '3 Months' : 
+                                sub.billing_cycle === 'YEARLY' ? 'Yearly' : sub.billing_cycle}
+                             </td>
                              <td className="px-6 py-3">
                                <div className="flex flex-col items-start gap-1">
                                  <span className="font-bold text-slate-600 text-[11px]">{formatDate(sub.next_billing_date)}</span>
@@ -390,6 +421,7 @@ export default function Subscriptions() {
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium"
                     >
                       <option value="MONTHLY">Monthly</option>
+                      <option value="QUARTERLY">3 Months</option>
                       <option value="YEARLY">Yearly</option>
                     </select>
                   </div>
