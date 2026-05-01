@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 import models, schemas
 from passlib.context import CryptContext
 from sqlalchemy import func
@@ -60,6 +60,68 @@ def get_transactions(db: Session, user_id: int, skip: int = 0, limit: int = 100)
 
 def get_budget_alerts(db: Session, user_id: int):
     return db.query(models.BudgetAlert).filter(models.BudgetAlert.user_id == user_id).order_by(models.BudgetAlert.alert_date.desc()).all()
+
+
+def create_budget(db: Session, budget: schemas.BudgetCreate, user_id: int):
+    category_ids = list(dict.fromkeys(budget.category_ids))
+    categories = (
+        db.query(models.Category)
+        .filter(models.Category.user_id == user_id, models.Category.id.in_(category_ids))
+        .all()
+    )
+    if len(categories) != len(category_ids):
+        raise ValueError("One or more categories are invalid")
+
+    db_budget = models.Budget(user_id=user_id, name=budget.name, amount=budget.amount)
+    db_budget.categories = categories
+    db.add(db_budget)
+    db.commit()
+    db.refresh(db_budget)
+    return db_budget
+
+
+def get_budgets(db: Session, user_id: int):
+    return (
+        db.query(models.Budget)
+        .options(selectinload(models.Budget.categories))
+        .filter(models.Budget.user_id == user_id)
+        .order_by(models.Budget.created_at.desc())
+        .all()
+    )
+
+
+def get_budget(db: Session, budget_id: int, user_id: int):
+    return (
+        db.query(models.Budget)
+        .options(selectinload(models.Budget.categories))
+        .filter(models.Budget.id == budget_id, models.Budget.user_id == user_id)
+        .first()
+    )
+
+
+def update_budget(db: Session, budget_id: int, budget_update: schemas.BudgetUpdate, user_id: int):
+    db_budget = db.query(models.Budget).filter(models.Budget.id == budget_id, models.Budget.user_id == user_id).first()
+    if not db_budget:
+        return None
+
+    if budget_update.name is not None:
+        db_budget.name = budget_update.name
+    if budget_update.amount is not None:
+        db_budget.amount = budget_update.amount
+    if budget_update.category_ids is not None:
+        category_ids = list(dict.fromkeys(budget_update.category_ids))
+        categories = (
+            db.query(models.Category)
+            .filter(models.Category.user_id == user_id, models.Category.id.in_(category_ids))
+            .all()
+        )
+        if len(categories) != len(category_ids):
+            raise ValueError("One or more categories are invalid")
+        db_budget.categories = categories
+
+    db.commit()
+    db.refresh(db_budget)
+    return db_budget
 
 # Analytics Queries
 def get_monthly_overview(db: Session, user_id: int, year: int):

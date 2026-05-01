@@ -23,6 +23,24 @@ export const getCategories = async () => {
   return response.data;
 };
 
+export const getBudgets = async () => {
+  const response = await api.get('/budgets/');
+  return response.data;
+};
+
+export const createBudget = async (data: { name: string; amount: number; category_ids: number[] }) => {
+  const response = await api.post('/budgets/', data);
+  return response.data;
+};
+
+export const updateBudget = async (
+  budgetId: number,
+  data: { name?: string; amount?: number; category_ids?: number[] }
+) => {
+  const response = await api.put(`/budgets/${budgetId}`, data);
+  return response.data;
+};
+
 export const getMonthlyOverview = async () => {
   const response = await api.get('/analytics/monthly-overview');
   return response.data;

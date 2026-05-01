@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '../lib/useAuth';
 import { Wallet, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -13,7 +13,7 @@ export default function Login() {
   const location = useLocation();
   const isAddingAccount = (location.state as any)?.isAddingAccount;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       if (isRegistering) {

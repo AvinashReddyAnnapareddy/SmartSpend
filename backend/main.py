@@ -97,6 +97,32 @@ def create_category(category: schemas.CategoryCreate, db: Session = Depends(get_
 def read_categories(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_categories(db, user_id=current_user.id)
 
+# --- Budgets ---
+@app.post("/budgets/", response_model=schemas.BudgetResponse)
+def create_budget(budget: schemas.BudgetCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if not budget.category_ids:
+        raise HTTPException(status_code=400, detail="At least one category is required")
+    try:
+        return crud.create_budget(db=db, budget=budget, user_id=current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/budgets/", response_model=List[schemas.BudgetResponse])
+def read_budgets(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.get_budgets(db, user_id=current_user.id)
+
+
+@app.put("/budgets/{budget_id}", response_model=schemas.BudgetResponse)
+def update_budget(budget_id: int, budget_update: schemas.BudgetUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    try:
+        updated = crud.update_budget(db=db, budget_id=budget_id, budget_update=budget_update, user_id=current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    return updated
+
 # --- Transactions ---
 @app.post("/transactions/", response_model=schemas.TransactionResponse)
 def create_transaction(transaction: schemas.TransactionCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

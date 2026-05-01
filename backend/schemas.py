@@ -35,6 +35,31 @@ class CategoryResponse(CategoryBase):
     class Config:
         from_attributes = True
 
+# --- Budget Schemas ---
+class BudgetBase(BaseModel):
+    name: str
+    amount: float
+
+
+class BudgetCreate(BudgetBase):
+    category_ids: List[int]
+
+
+class BudgetUpdate(BaseModel):
+    name: Optional[str] = None
+    amount: Optional[float] = None
+    category_ids: Optional[List[int]] = None
+
+
+class BudgetResponse(BudgetBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    categories: List[CategoryResponse]
+
+    class Config:
+        from_attributes = True
+
 # --- Transaction Schemas ---
 class TransactionBase(BaseModel):
     category_id: int

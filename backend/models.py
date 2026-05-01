@@ -1,8 +1,15 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Enum as SQLEnum, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Enum as SQLEnum, Boolean, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 from database import Base
+
+budget_categories = Table(
+    "budget_categories",
+    Base.metadata,
+    Column("budget_id", Integer, ForeignKey("budgets.id"), primary_key=True),
+    Column("category_id", Integer, ForeignKey("categories.id"), primary_key=True),
+)
 
 class TransactionType(str, enum.Enum):
     INCOME = 'INCOME'
@@ -23,6 +30,7 @@ class User(Base):
     categories = relationship("Category", back_populates="owner")
     transactions = relationship("Transaction", back_populates="owner")
     budget_alerts = relationship("BudgetAlert", back_populates="owner")
+    budgets = relationship("Budget", back_populates="owner")
     rules = relationship("CategorizationRule", back_populates="owner")
     subscriptions = relationship("Subscription", back_populates="owner")
 
@@ -39,6 +47,20 @@ class Category(Base):
     transactions = relationship("Transaction", back_populates="category")
     rules = relationship("CategorizationRule", back_populates="category")
     budget_alerts = relationship("BudgetAlert", back_populates="category")
+    budgets = relationship("Budget", secondary=budget_categories, back_populates="categories")
+
+
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    owner = relationship("User", back_populates="budgets")
+    categories = relationship("Category", secondary=budget_categories, back_populates="budgets")
 
 class CategorizationRule(Base):
     __tablename__ = "categorization_rules"

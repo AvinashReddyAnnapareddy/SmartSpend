@@ -86,7 +86,7 @@ export default function Dashboard() {
           >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-[13px] font-bold text-[#1e293b] tracking-tight">Spending by Category</h3>
-              <Link to="/analytics" className="text-brand-600 text-[11px] font-bold hover:underline flex items-center gap-1">
+              <Link to="/categories" className="text-brand-600 text-[11px] font-bold hover:underline flex items-center gap-1">
                 View All <ChevronRight className="w-3 h-3" />
               </Link>
             </div>

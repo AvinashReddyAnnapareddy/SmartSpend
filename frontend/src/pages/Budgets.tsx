@@ -1,6 +1,6 @@
 import { Header } from '../components/Header';
-import { useState, useEffect } from 'react';
-import { getCategories, getTransactions } from '../lib/api';
+import { useState, useEffect, useMemo } from 'react';
+import { createBudget, getBudgets, getCategories, getTransactions, updateBudget } from '../lib/api';
 import { 
   Plus, 
   ArrowUpRight, 
@@ -22,52 +22,160 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 const categoryIcons: Record<string, any> = {
   'Food & Dining': UtensilsCrossed,
+  'Groceries': UtensilsCrossed,
   'Travel': Plane,
+  'Transport': Plane,
   'Shopping': ShoppingBag,
+  'Entertainment': ShoppingBag,
   'Bills & Utilities': Zap,
-  'Bills & Utilities': Zap,
+  'Rent': Zap,
 };
 
 export default function Budgets() {
   const [budgets, setBudgets] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [isBudgetFormOpen, setIsBudgetFormOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<any | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formAmount, setFormAmount] = useState('');
+  const [formCategoryIds, setFormCategoryIds] = useState<number[]>([]);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const expenseCategories = useMemo(
+    () => categories.filter((c) => String(c.transaction_type).toUpperCase() === 'EXPENSE'),
+    [categories]
+  );
+
+  const budgetsWithSpent = useMemo(() => {
+    return budgets.map((budget) => {
+      const categoryIds = (budget.categories ?? [])
+        .map((c: any) => Number(c.id))
+        .filter((id: number) => Number.isFinite(id));
+      const categoryIdSet = new Set<number>(categoryIds);
+      const spent = transactions.reduce((sum: number, t: any) => {
+        const categoryId = Number(t?.category?.id);
+        if (categoryIdSet.has(categoryId)) {
+          return sum + (Number(t.amount) || 0);
+        }
+        return sum;
+      }, 0);
+      return { ...budget, categoryIds, spent };
+    });
+  }, [budgets, transactions]);
+
+  const refreshBudgets = async () => {
+    const data = await getBudgets();
+    setBudgets(data);
+  };
+
+  const closeBudgetForm = () => {
+    setIsBudgetFormOpen(false);
+    setEditingBudget(null);
+    setFormError(null);
+  };
+
+  const openNewBudgetForm = () => {
+    setEditingBudget(null);
+    setFormName('');
+    setFormAmount('');
+    setFormCategoryIds([]);
+    setFormError(null);
+    setIsBudgetFormOpen(true);
+  };
+
+  const openEditBudgetForm = (budget: any) => {
+    setEditingBudget(budget);
+    setFormName(budget.name ?? '');
+    setFormAmount(String(budget.amount ?? ''));
+    setFormCategoryIds(
+      (budget.categories ?? [])
+        .map((c: any) => Number(c.id))
+        .filter((id: number) => Number.isFinite(id))
+    );
+    setFormError(null);
+    setIsBudgetFormOpen(true);
+  };
+
+  const toggleFormCategory = (categoryId: number) => {
+    setFormCategoryIds((prev) =>
+      prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId]
+    );
+  };
+
+  const saveBudget = async () => {
+    setFormError(null);
+    const name = formName.trim();
+    const amount = Number(formAmount);
+
+    if (!name) {
+      setFormError('Budget name is required');
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setFormError('Amount must be a number greater than 0');
+      return;
+    }
+    if (formCategoryIds.length === 0) {
+      setFormError('Select at least one category');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingBudget) {
+        await updateBudget(editingBudget.id, { name, amount, category_ids: formCategoryIds });
+      } else {
+        await createBudget({ name, amount, category_ids: formCategoryIds });
+      }
+      await refreshBudgets();
+      closeBudgetForm();
+    } catch (error) {
+      console.error('Failed to save budget', error);
+      setFormError('Failed to save budget');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const [cats, txs] = await Promise.all([
-          getCategories(),
-          getTransactions()
-        ]);
-        
-        // Transform categories into budgets format
-        const calculatedBudgets = cats.filter(c => c.transaction_type === 'EXPENSE').map(c => {
-          const spent = txs.filter(t => t.category.id === c.id).reduce((sum, t) => sum + t.amount, 0);
-          return {
-            id: c.id,
-            category: c.name,
-            budgeted: c.monthly_budget_limit || 0,
-            spent: spent,
-            color: '#10B981'
-          };
-        });
-        
-        setBudgets(calculatedBudgets);
-        setTransactions(txs);
-      } catch (error) {
-        console.error("Failed to fetch budgets", error);
-      } finally {
-        setLoading(false);
+      const [budgetsRes, catsRes, txsRes] = await Promise.allSettled([
+        getBudgets(),
+        getCategories(),
+        getTransactions(),
+      ]);
+
+      if (catsRes.status === 'fulfilled') {
+        setCategories(catsRes.value);
+      } else {
+        console.error('Failed to fetch categories', catsRes.reason);
       }
+
+      if (txsRes.status === 'fulfilled') {
+        setTransactions(txsRes.value);
+      } else {
+        console.error('Failed to fetch transactions', txsRes.reason);
+      }
+
+      if (budgetsRes.status === 'fulfilled') {
+        setBudgets(budgetsRes.value);
+      } else {
+        console.error('Failed to fetch budgets', budgetsRes.reason);
+      }
+
+      setLoading(false);
     };
     fetchData();
   }, []);
 
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading budgets...</div>;
 
-  const totalBudgeted = budgets.reduce((acc, b) => acc + b.budgeted, 0);
-  const totalSpent = budgets.reduce((acc, b) => acc + b.spent, 0);
+  const totalBudgeted = budgetsWithSpent.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const totalSpent = budgetsWithSpent.reduce((acc, b) => acc + (Number(b.spent) || 0), 0);
   const remaining = totalBudgeted - totalSpent;
   const budgetStats = [
     { name: 'Budgeted', amount: totalBudgeted, color: '#4F46E5', percent: 100 },
@@ -97,12 +205,119 @@ export default function Budgets() {
               ))}
             </div>
             <div className="flex items-center gap-3">
-              <button className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[11px] font-bold transition-all shrink-0">
+              <button
+                onClick={openNewBudgetForm}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[11px] font-bold transition-all shrink-0"
+              >
                 <Plus className="w-4 h-4" />
                 <span>New Budget</span>
               </button>
             </div>
           </div>
+
+          {isBudgetFormOpen && (
+            <div className="bg-white p-5 rounded-xl border border-[#e2e8f0] shadow-none mb-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-[13px] font-bold text-[#1e293b]">
+                    {editingBudget ? 'Edit Budget' : 'New Budget'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Set a monthly limit and pick categories.
+                  </p>
+                </div>
+                <button
+                  onClick={closeBudgetForm}
+                  className="text-[11px] font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">
+                    Budget Name
+                  </label>
+                  <input
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-[11px] font-bold outline-none"
+                    placeholder="e.g. Essentials"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">
+                    Monthly Limit
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formAmount}
+                    onChange={(e) => setFormAmount(e.target.value)}
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-[11px] font-bold outline-none"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <label className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">
+                  Categories
+                </label>
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-3 max-h-40 overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {expenseCategories.map((c) => {
+                      const categoryId = Number(c.id);
+                      const inputId = `budget-category-${categoryId}`;
+                      return (
+                        <div
+                          key={inputId}
+                          className="flex items-center gap-2 text-[11px] font-bold text-slate-600"
+                        >
+                          <input
+                            id={inputId}
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={formCategoryIds.includes(categoryId)}
+                            onChange={() => toggleFormCategory(categoryId)}
+                          />
+                          <label
+                            htmlFor={inputId}
+                            className="truncate cursor-pointer select-none"
+                          >
+                            {c.name}
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {formError && <p className="mt-3 text-[11px] font-bold text-rose-600">{formError}</p>}
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  onClick={closeBudgetForm}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveBudget}
+                  disabled={saving}
+                  className={cn(
+                    "px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[11px] font-bold transition-all",
+                    saving && "opacity-60 cursor-not-allowed"
+                  )}
+                >
+                  {saving ? 'Saving...' : editingBudget ? 'Save Changes' : 'Create Budget'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Urgent Alert */}
           <motion.div 
@@ -124,9 +339,11 @@ export default function Budgets() {
 
           {/* Budget Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-6">
-            {budgets.map((budget, i) => {
-              const Icon = categoryIcons[budget.category] || UtensilsCrossed;
-              const percent = (budget.spent / budget.budgeted) * 100;
+            {budgetsWithSpent.map((budget, i) => {
+              const primaryCategoryName = budget.categories?.[0]?.name;
+              const Icon = categoryIcons[primaryCategoryName] || UtensilsCrossed;
+              const percent = budget.amount ? (budget.spent / budget.amount) * 100 : 0;
+              const widthPercent = Math.min(Math.max(percent, 0), 100);
               return (
                 <motion.div 
                   key={budget.id}
@@ -141,13 +358,16 @@ export default function Budgets() {
                         <Icon className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-[13px] font-bold text-[#1e293b] tracking-tight">{budget.category}</h4>
+                        <h4 className="text-[13px] font-bold text-[#1e293b] tracking-tight">{budget.name}</h4>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Active Budget</p>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 truncate max-w-[190px]">
+                          {(budget.categories ?? []).map((c: any) => c.name).join(', ')}
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">
                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest leading-none mb-1">Total</p>
-                       <p className="text-sm font-bold font-mono text-[#1e293b] leading-none">{formatCurrency(budget.budgeted)}</p>
+                       <p className="text-sm font-bold font-mono text-[#1e293b] leading-none">{formatCurrency(budget.amount)}</p>
                     </div>
                   </div>
 
@@ -158,7 +378,7 @@ export default function Budgets() {
                           "h-full rounded-full",
                           percent > 90 ? "bg-rose-500" : percent > 70 ? "bg-amber-500" : "bg-emerald-500"
                         )}
-                        style={{ width: `${percent}%` }}
+                        style={{ width: `${widthPercent}%` }}
                        />
                     </div>
                     
@@ -171,7 +391,10 @@ export default function Budgets() {
                     </div>
 
                     <div className="space-y-2 pt-2">
-                      {transactions.filter(t => t.category.name === budget.category).slice(0, 2).map((t) => (
+                      {transactions
+                        .filter((t) => budget.categoryIds.includes(Number(t.category.id)))
+                        .slice(0, 2)
+                        .map((t) => (
                         <div key={t.id} className="flex items-center justify-between py-1 border-t border-slate-50 first:border-0">
                           <span className="text-[11px] text-slate-600 truncate max-w-[140px]">{t.description}</span>
                           <span className="text-[11px] font-bold font-mono text-[#1e293b]">{formatCurrency(t.amount)}</span>
@@ -181,7 +404,12 @@ export default function Budgets() {
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
-                     <button className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-600 transition-colors">Details</button>
+                     <button
+                      onClick={() => openEditBudgetForm(budget)}
+                      className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-600 transition-colors"
+                    >
+                      Details
+                    </button>
                      <p className="text-[10px] font-bold text-slate-400">MAY REPORT</p>
                   </div>
                 </motion.div>
@@ -213,7 +441,7 @@ export default function Budgets() {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                  <p className="text-xl font-bold font-mono text-[#1e293b]">{budgets.length}</p>
+                  <p className="text-xl font-bold font-mono text-[#1e293b]">{budgetsWithSpent.length}</p>
                   <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">BUDGETS</p>
                 </div>
               </div>

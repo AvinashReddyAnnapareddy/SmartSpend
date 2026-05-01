@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { scanReceipt, getCategories, createTransaction, createCategory } from '../lib/api';
 
 export default function AddExpense() {
@@ -50,7 +50,7 @@ export default function AddExpense() {
     fetchCategories();
   }, []);
 
-  const handleCreateCategory = async (e: React.FormEvent) => {
+  const handleCreateCategory = async (e: FormEvent) => {
     e.preventDefault();
     if (!newCategoryName) return;
 
@@ -71,7 +71,7 @@ export default function AddExpense() {
     }
   };
 
-  const handleScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleScan = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -93,7 +93,7 @@ export default function AddExpense() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!amount || !categoryId || !date) {
       alert("Please fill in all required fields.");
