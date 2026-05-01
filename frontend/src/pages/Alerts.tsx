@@ -18,7 +18,6 @@ const icons: Record<string, any> = {
   AlertTriangle,
   Zap,
   CreditCard,
-  CreditCard,
 };
 
 export default function Alerts() {

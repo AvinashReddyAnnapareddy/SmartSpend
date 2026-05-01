@@ -19,8 +19,10 @@ import {
 import { formatCurrency, cn, formatDate } from '../lib/utils';
 import { motion } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 
 export default function Transactions() {
+  const navigate = useNavigate();
   const [transactions, setTransactions] = useState([]);
   const [spendingByCategory, setSpendingByCategory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,10 @@ export default function Transactions() {
                   className="w-48 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg pl-9 pr-4 py-1.5 text-[11px] focus:ring-1 focus:ring-brand-600/40 outline-none"
                 />
               </div>
-              <button className="flex items-center gap-2 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-none">
+              <button
+                onClick={() => navigate('/add-expense')}
+                className="flex items-center gap-2 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-none"
+              >
                 <Plus className="w-3.5 h-3.5" />
                 <span>New</span>
               </button>
@@ -257,7 +262,12 @@ export default function Transactions() {
           <div className="bg-white p-5 rounded-xl border border-[#e2e8f0] shadow-none">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-[13px] font-bold text-[#1e293b]">Categories</h3>
-              <button className="text-brand-600 text-[10px] font-bold uppercase tracking-widest leading-none">View All</button>
+              <button
+                onClick={() => navigate('/categories')}
+                className="text-brand-600 text-[10px] font-bold uppercase tracking-widest leading-none"
+              >
+                View All
+              </button>
             </div>
             <div className="space-y-3">
               {spendingByCategory.slice(0, 4).map((cat, i) => (
