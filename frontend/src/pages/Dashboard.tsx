@@ -2,6 +2,7 @@ import { Header } from '../components/Header';
 import { StatCard } from '../components/StatCard';
 import { useState, useEffect } from 'react';
 import { getMonthlyOverview, getSpendingByCategory, getTransactions } from '../lib/api';
+import { Link } from 'react-router-dom';
 import { 
   Wallet, 
   TrendingUp, 
@@ -85,9 +86,9 @@ export default function Dashboard() {
           >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-[13px] font-bold text-[#1e293b] tracking-tight">Spending by Category</h3>
-              <button className="text-brand-600 text-[11px] font-bold hover:underline flex items-center gap-1">
+              <Link to="/analytics" className="text-brand-600 text-[11px] font-bold hover:underline flex items-center gap-1">
                 View All <ChevronRight className="w-3 h-3" />
-              </button>
+              </Link>
             </div>
             <div className="flex-1 min-h-[260px] relative flex items-center justify-center">
               {spendingByCategory.length > 0 ? (
@@ -194,9 +195,9 @@ export default function Dashboard() {
           >
             <div className="px-5 py-4 border-b border-[#e2e8f0] flex justify-between items-center">
               <h3 className="text-[13px] font-bold text-[#1e293b] tracking-tight">Recent Transactions</h3>
-              <button className="text-brand-600 text-[11px] font-bold hover:underline flex items-center gap-1">
+              <Link to="/transactions" className="text-brand-600 text-[11px] font-bold hover:underline flex items-center gap-1">
                 View All <ChevronRight className="w-3 h-3" />
-              </button>
+              </Link>
             </div>
             <div className="divide-y divide-[#e2e8f0]">
               {transactions.slice(0, 5).map((tx) => (
